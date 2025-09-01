@@ -17,8 +17,12 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
       img.src = shapes[currentShape].template;
       img.onload = () => {
         ctx.globalAlpha = 0.3;
-        ctx.drawImage(img, 50, 50, 100, 100);
+        ctx.drawImage(img, 25, 25, 150, 150); // Увеличенный шаблон
         ctx.globalAlpha = 1.0;
+      };
+      img.onerror = () => {
+        console.error(`Failed to load template: ${shapes[currentShape].template}`);
+        setFeedback('Не удалось загрузить шаблон. Попробуй другую фигуру!');
       };
     }
   }, [currentShape, mode]);
@@ -26,9 +30,11 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
   const handleTracePoints = (x, y) => {
     if (mode !== 'points') return;
     const point = shapes[currentShape].points[currentPoint];
-    if (Math.abs(point[0] - x) < 20 && Math.abs(point[1] - y) < 20) {
+    const distance = Math.sqrt((point[0] - x) ** 2 + (point[1] - y) ** 2);
+    if (distance < 30) { // Увеличен радиус срабатывания
       if (currentPoint + 1 < shapes[currentShape].points.length) {
         setCurrentPoint(currentPoint + 1);
+        setFeedback('Отлично, кликни следующую точку!');
       } else {
         setFeedback('Молодец! Ты обвёл фигуру! 🌟');
         addStar();
@@ -40,8 +46,10 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
           } else {
             setFeedback('Ты обвёл все фигуры!');
           }
-        }, 1000);
+        }, 1500);
       }
+    } else {
+      setFeedback('Кликни ближе к точке!');
     }
   };
 
@@ -51,8 +59,8 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = (e.clientX || e.touches[0].clientX) - rect.left;
+    const y = (e.clientY || e.touches[0].clientY) - rect.top;
     ctx.beginPath();
     ctx.moveTo(x, y);
   };
@@ -62,8 +70,8 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = (e.clientX || e.touches[0].clientX) - rect.left;
+    const y = (e.clientY || e.touches[0].clientY) - rect.top;
     ctx.lineTo(x, y);
     ctx.strokeStyle = 'blue';
     ctx.lineWidth = 5;
@@ -82,22 +90,32 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
       } else {
         setFeedback('Ты нарисовал все фигуры!');
       }
-    }, 1000);
+    }, 1500);
   };
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md max-w-md w-full text-center">
-      <h2 className="text-2xl font-semibold mb-4">Обведи: {shapes[currentShape].shape}</h2>
+      <h2 className="text-3xl font-bold mb-4">Обведи: {shapes[currentShape].shape}</h2>
+      <p className="text-lg mb-4">
+        {mode === 'points' ? 'Кликни по красным точкам!' : 'Рисуй по контуру буквы или цифры!'}
+      </p>
       <div className="flex justify-center space-x-4 mb-4">
         <button
-          onClick={() => setMode('points')}
-          className={`p-2 rounded-lg ${mode === 'points' ? 'bg-purple-500 text-white' : 'bg-gray-200'}`}
+          onClick={() => {
+            setMode('points');
+            setFeedback('');
+            setCurrentPoint(0);
+          }}
+          className={`p-3 rounded-lg text-lg ${mode === 'points' ? 'bg-purple-500 text-white' : 'bg-gray-200'}`}
         >
           По точкам
         </button>
         <button
-          onClick={() => setMode('free')}
-          className={`p-2 rounded-lg ${mode === 'free' ? 'bg-purple-500 text-white' : 'bg-gray-200'}`}
+          onClick={() => {
+            setMode('free');
+            setFeedback('');
+          }}
+          className={`p-3 rounded-lg text-lg ${mode === 'free' ? 'bg-purple-500 text-white' : 'bg-gray-200'}`}
         >
           Свободно
         </button>
@@ -119,9 +137,23 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
               key={index}
               cx={point[0]}
               cy={point[1]}
-              r="10"
+              r="12" // Увеличен размер точек
               fill={index < currentPoint ? 'green' : 'red'}
+              className="hover:scale-110 transition-transform"
             />
+          ))}
+          {shapes[currentShape].points.slice(0, currentPoint).map((point, index) => (
+            index < currentPoint - 1 && (
+              <line
+                key={`line-${index}`}
+                x1={shapes[currentShape].points[index][0]}
+                y1={shapes[currentShape].points[index][1]}
+                x2={shapes[currentShape].points[index + 1][0]}
+                y2={shapes[currentShape].points[index + 1][1]}
+                stroke="green"
+                strokeWidth="3"
+              />
+            )
           ))}
         </svg>
       ) : (
@@ -134,31 +166,20 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
           onMouseMove={draw}
           onMouseUp={stopDrawing}
           onMouseOut={stopDrawing}
-          onTouchStart={(e) => {
-            const touch = e.touches[0];
-            startDrawing({ clientX: touch.clientX, clientY: touch.clientY });
-          }}
-          onTouchMove={(e) => {
-            const touch = e.touches[0];
-            draw({ clientX: touch.clientX, clientY: touch.clientY });
-          }}
+          onTouchStart={(e) => startDrawing(e)}
+          onTouchMove={(e) => draw(e)}
           onTouchEnd={stopDrawing}
         />
       )}
-      {feedback && <p className="text-lg font-medium">{feedback}</p>}
+      {feedback && <p className="text-xl font-medium text-blue-600">{feedback}</p>}
       <button
         onClick={onBack}
-        className="mt-4 bg-red-500 text-white p-2 rounded-lg w-full"
+        className="mt-4 bg-red-500 text-white p-3 rounded-lg w-full text-lg"
       >
         Назад
       </button>
     </div>
   );
 };
-
-export default TraceGame;
-  );
-};
-
 
 export default TraceGame;
