@@ -4,37 +4,38 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
   const [currentShape, setCurrentShape] = useState(0);
   const [currentPoint, setCurrentPoint] = useState(0);
   const [feedback, setFeedback] = useState('');
-  const [mode, setMode] = useState('points'); // 'points' или 'free'
+  const [mode, setMode] = useState('contour'); // 'contour' или 'free'
   const [isDrawing, setIsDrawing] = useState(false);
+  const [drawnPoints, setDrawnPoints] = useState([]);
   const canvasRef = useRef(null);
 
-  useEffect(() => {
-    if (mode === 'free' && canvasRef.current) {
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const img = new Image();
-      img.src = shapes[currentShape].template;
-      img.onload = () => {
-        ctx.globalAlpha = 0.3;
-        ctx.drawImage(img, 25, 25, 150, 150); // Увеличенный шаблон
-        ctx.globalAlpha = 1.0;
-      };
-      img.onerror = () => {
-        console.error(`Failed to load template: ${shapes[currentShape].template}`);
-        setFeedback('Не удалось загрузить шаблон. Попробуй другую фигуру!');
-      };
-    }
-  }, [currentShape, mode]);
+  // Ключевые точки для распознавания (упрощённые координаты контура)
+  const getKeyPoints = (shape) => {
+    const points = shapes.find(s => s.shape === shape).points;
+    return points.map(([x, y]) => ({ x, y }));
+  };
 
-  const handleTracePoints = (x, y) => {
-    if (mode !== 'points') return;
+  // Проверка покрытия ключевых точек для распознавания
+  const checkDrawing = () => {
+    const keyPoints = getKeyPoints(shapes[currentShape].shape);
+    let hitCount = 0;
+    keyPoints.forEach(point => {
+      const hit = drawnPoints.some(dp => 
+        Math.sqrt((dp.x - point.x) ** 2 + (dp.y - point.y) ** 2) < 30
+      );
+      if (hit) hitCount++;
+    });
+    return hitCount / keyPoints.length >= 0.7; // 70% точек покрыто
+  };
+
+  const handleContourTrace = (x, y) => {
+    if (mode !== 'contour') return;
     const point = shapes[currentShape].points[currentPoint];
     const distance = Math.sqrt((point[0] - x) ** 2 + (point[1] - y) ** 2);
-    if (distance < 30) { // Увеличен радиус срабатывания
+    if (distance < 30) {
       if (currentPoint + 1 < shapes[currentShape].points.length) {
         setCurrentPoint(currentPoint + 1);
-        setFeedback('Отлично, кликни следующую точку!');
+        setFeedback('Отлично, обведи следующую точку!');
       } else {
         setFeedback('Молодец! Ты обвёл фигуру! 🌟');
         addStar();
@@ -49,7 +50,7 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
         }, 1500);
       }
     } else {
-      setFeedback('Кликни ближе к точке!');
+      setFeedback('Кликни ближе к контуру!');
     }
   };
 
@@ -63,6 +64,7 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
     const y = (e.clientY || e.touches[0].clientY) - rect.top;
     ctx.beginPath();
     ctx.moveTo(x, y);
+    setDrawnPoints([{ x, y }]);
   };
 
   const draw = (e) => {
@@ -76,51 +78,77 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
     ctx.strokeStyle = 'blue';
     ctx.lineWidth = 5;
     ctx.stroke();
+    setDrawnPoints(prev => [...prev, { x, y }]);
   };
 
   const stopDrawing = () => {
     if (mode !== 'free') return;
     setIsDrawing(false);
-    setFeedback('Молодец! Ты нарисовал фигуру! 🌟');
-    addStar();
-    setTimeout(() => {
-      if (currentShape + 1 < shapes.length) {
-        setCurrentShape(currentShape + 1);
-        setFeedback('');
-      } else {
-        setFeedback('Ты нарисовал все фигуры!');
-      }
-    }, 1500);
+    const isCorrect = checkDrawing();
+    setFeedback(isCorrect ? 'Верно! Ты нарисовал правильно! 🌟' : 'Попробуй ещё раз!');
+    if (isCorrect) {
+      addStar();
+      setTimeout(() => {
+        if (currentShape + 1 < shapes.length) {
+          setCurrentShape(currentShape + 1);
+          setDrawnPoints([]);
+          setFeedback('');
+        } else {
+          setFeedback('Ты нарисовал все фигуры!');
+        }
+      }, 1500);
+    }
+  };
+
+  useEffect(() => {
+    if (mode === 'free' && canvasRef.current) {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.font = '100px Comic Sans MS';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(shapes[currentShape].shape, 100, 100);
+    }
+  }, [currentShape, mode]);
+
+  // SVG-путь для контура (упрощённый, для демонстрации)
+  const getContourPath = (shape) => {
+    const points = shapes.find(s => s.shape === shape).points;
+    return `M${points[0][0]},${points[0][1]} ` + 
+           points.slice(1).map(p => `L${p[0]},${p[1]}`).join(' ');
   };
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md max-w-md w-full text-center">
       <h2 className="text-3xl font-bold mb-4">Обведи: {shapes[currentShape].shape}</h2>
       <p className="text-lg mb-4">
-        {mode === 'points' ? 'Кликни по красным точкам!' : 'Рисуй по контуру буквы или цифры!'}
+        {mode === 'contour' ? 'Кликни по контуру буквы или цифры!' : 'Нарисуй фигуру сам!'}
       </p>
       <div className="flex justify-center space-x-4 mb-4">
         <button
           onClick={() => {
-            setMode('points');
+            setMode('contour');
             setFeedback('');
             setCurrentPoint(0);
           }}
-          className={`p-3 rounded-lg text-lg ${mode === 'points' ? 'bg-purple-500 text-white' : 'bg-gray-200'}`}
+          className={`p-3 rounded-lg text-lg ${mode === 'contour' ? 'bg-purple-500 text-white' : 'bg-gray-200'}`}
         >
-          По точкам
+          По контуру
         </button>
         <button
           onClick={() => {
             setMode('free');
             setFeedback('');
+            setDrawnPoints([]);
           }}
           className={`p-3 rounded-lg text-lg ${mode === 'free' ? 'bg-purple-500 text-white' : 'bg-gray-200'}`}
         >
           Свободно
         </button>
       </div>
-      {mode === 'points' ? (
+      {mode === 'contour' ? (
         <svg
           width="200"
           height="200"
@@ -129,15 +157,33 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
             const rect = e.currentTarget.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
-            handleTracePoints(x, y);
+            handleContourTrace(x, y);
           }}
         >
+          <text
+            x="100"
+            y="100"
+            fontFamily="Comic Sans MS"
+            fontSize="100"
+            fill="rgba(0, 0, 0, 0.3)"
+            textAnchor="middle"
+            dominantBaseline="middle"
+          >
+            {shapes[currentShape].shape}
+          </text>
+          <path
+            d={getContourPath(shapes[currentShape].shape)}
+            stroke="red"
+            strokeWidth="3"
+            fill="none"
+            className="animate-pulse"
+          />
           {shapes[currentShape].points.map((point, index) => (
             <circle
               key={index}
               cx={point[0]}
               cy={point[1]}
-              r="12" // Увеличен размер точек
+              r="12"
               fill={index < currentPoint ? 'green' : 'red'}
               className="hover:scale-110 transition-transform"
             />
