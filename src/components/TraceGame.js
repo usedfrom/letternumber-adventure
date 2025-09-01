@@ -9,13 +9,13 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
   const [drawnPoints, setDrawnPoints] = useState([]);
   const canvasRef = useRef(null);
 
-  // Ключевые точки для распознавания (упрощённые координаты контура)
+  // Ключевые точки для распознавания
   const getKeyPoints = (shape) => {
     const points = shapes.find(s => s.shape === shape).points;
     return points.map(([x, y]) => ({ x, y }));
   };
 
-  // Проверка покрытия ключевых точек для распознавания
+  // Проверка покрытия ключевых точек
   const checkDrawing = () => {
     const keyPoints = getKeyPoints(shapes[currentShape].shape);
     let hitCount = 0;
@@ -60,8 +60,8 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX || e.touches[0].clientX) - rect.left;
-    const y = (e.clientY || e.touches[0].clientY) - rect.top;
+    const x = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
+    const y = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
     ctx.beginPath();
     ctx.moveTo(x, y);
     setDrawnPoints([{ x, y }]);
@@ -72,8 +72,8 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX || e.touches[0].clientX) - rect.left;
-    const y = (e.clientY || e.touches[0].clientY) - rect.top;
+    const x = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
+    const y = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
     ctx.lineTo(x, y);
     ctx.strokeStyle = 'blue';
     ctx.lineWidth = 5;
@@ -105,7 +105,7 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.font = '100px Comic Sans MS';
+      ctx.font = '100px Balsamiq Sans';
       ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -113,7 +113,7 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
     }
   }, [currentShape, mode]);
 
-  // SVG-путь для контура (упрощённый, для демонстрации)
+  // SVG-путь для контура
   const getContourPath = (shape) => {
     const points = shapes.find(s => s.shape === shape).points;
     return `M${points[0][0]},${points[0][1]} ` + 
@@ -122,9 +122,9 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md max-w-md w-full text-center">
-      <h2 className="text-3xl font-bold mb-4">Обведи: {shapes[currentShape].shape}</h2>
-      <p className="text-lg mb-4">
-        {mode === 'contour' ? 'Кликни по контуру буквы или цифры!' : 'Нарисуй фигуру сам!'}
+      <h2 className="text-4xl font-bold mb-4 gradient-text">Обведи: {shapes[currentShape].shape}</h2>
+      <p className="text-xl mb-4">
+        {mode === 'contour' ? `Обведи ${shapes[currentShape].shape} по контуру!` : `Нарисуй ${shapes[currentShape].shape} сам!`}
       </p>
       <div className="flex justify-center space-x-4 mb-4">
         <button
@@ -133,7 +133,7 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
             setFeedback('');
             setCurrentPoint(0);
           }}
-          className={`p-3 rounded-lg text-lg ${mode === 'contour' ? 'bg-purple-500 text-white' : 'bg-gray-200'}`}
+          className={`p-3 rounded-lg text-xl ${mode === 'contour' ? 'bg-purple-500 text-white' : 'bg-gray-200'}`}
         >
           По контуру
         </button>
@@ -143,7 +143,7 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
             setFeedback('');
             setDrawnPoints([]);
           }}
-          className={`p-3 rounded-lg text-lg ${mode === 'free' ? 'bg-purple-500 text-white' : 'bg-gray-200'}`}
+          className={`p-3 rounded-lg text-xl ${mode === 'free' ? 'bg-purple-500 text-white' : 'bg-gray-200'}`}
         >
           Свободно
         </button>
@@ -160,10 +160,16 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
             handleContourTrace(x, y);
           }}
         >
+          <defs>
+            <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style={{ stopColor: '#ff6b6b', stopOpacity: 1 }} />
+              <stop offset="100%" style={{ stopColor: '#4ecdc4', stopOpacity: 1 }} />
+            </linearGradient>
+          </defs>
           <text
             x="100"
             y="100"
-            fontFamily="Comic Sans MS"
+            fontFamily="Balsamiq Sans"
             fontSize="100"
             fill="rgba(0, 0, 0, 0.3)"
             textAnchor="middle"
@@ -173,10 +179,9 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
           </text>
           <path
             d={getContourPath(shapes[currentShape].shape)}
-            stroke="red"
-            strokeWidth="3"
+            className="gradient-border animate-pulse"
+            strokeWidth="4"
             fill="none"
-            className="animate-pulse"
           />
           {shapes[currentShape].points.map((point, index) => (
             <circle
@@ -197,7 +202,7 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
                 x2={shapes[currentShape].points[index + 1][0]}
                 y2={shapes[currentShape].points[index + 1][1]}
                 stroke="green"
-                strokeWidth="3"
+                strokeWidth="4"
               />
             )
           ))}
@@ -217,10 +222,10 @@ const TraceGame = ({ shapes, addStar, onBack }) => {
           onTouchEnd={stopDrawing}
         />
       )}
-      {feedback && <p className="text-xl font-medium text-blue-600">{feedback}</p>}
+      {feedback && <p className="text-xl font-medium gradient-text">{feedback}</p>}
       <button
         onClick={onBack}
-        className="mt-4 bg-red-500 text-white p-3 rounded-lg w-full text-lg"
+        className="mt-4 bg-red-500 text-white p-3 rounded-lg w-full text-xl"
       >
         Назад
       </button>
